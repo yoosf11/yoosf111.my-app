@@ -35,29 +35,6 @@ async function hashPassword(password) {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// 4. إنشاء حسابات المديرين الأساسيين تلقائياً
-async function initSuperAdmins() {
-    const superAdmins = [
-        { username: 'دكتور السيد حراز', full_name: 'دكتور السيد حراز', pass: 'D_S@123' },
-        { username: 'يوسف طاهر الشعراوي', full_name: 'يوسف طاهر الشعراوي', pass: 'YT_AL_SH@1234' }
-    ];
-
-    for (let admin of superAdmins) {
-        const { data } = await db.from('users').select('id').eq('username', admin.username).single();
-        if (!data) {
-            const hashed = await hashPassword(admin.pass);
-            await db.from('users').insert([{
-                username: admin.username,
-                full_name: admin.full_name,
-                password_hash: hashed,
-                role: 'super_admin',
-                permissions: ['all']
-            }]);
-        }
-    }
-}
-initSuperAdmins();
-
 // 5. تسجيل الدخول
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -65,14 +42,12 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     const password = document.getElementById('loginPassword').value;
     const errorEl = document.getElementById('loginError');
     errorEl.textContent = currentLang === 'ar' ? "جاري التحقق..." : "Verifying...";
-
-    const hashed = await hashPassword(password);
-    const { data: user, error } = await db
-        .from('users')
-        .select('*')
-        .eq('username', username)
-        .eq('password_hash', hashed)
-        .single();
+ const { data, error } = await db.rpc('login_user', {
+    p_username: username,
+    p_password: password
+});
+const user = data && data.length ? data[0] : null;
+currentPassword = password;
 
     if (error || !user) {
         errorEl.textContent = currentLang === 'ar' ? "خطأ في اسم المستخدم أو كلمة المرور!" : "Invalid credentials!";
@@ -83,7 +58,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     errorEl.textContent = "";
     document.getElementById('loginSection').classList.add('hidden');
 
-    if (user.role === 'super_admin' || (user.permissions && user.permissions.length > 0)) {
+   if (user.role === 'super_admin' || user.role === 'admin' || (user.permissions && user.permissions.length > 0)) {
         openAdminDashboard();
     } else {
         openStudentDashboard();
@@ -195,8 +170,8 @@ async function openAdminDashboard() {
 }
 
 async function loadAlerts() {
-    const { data } = await db.from('alerts').select('*').order('created_at', { ascending: false }).limit(30);
-    const list = document.getElementById('alertsList');
+const { data } = await db.rpc('admin_list_users', { p_admin: currentUser.username, p_pass: currentPassword });   
+ const list = document.getElementById('alertsList');
     list.innerHTML = "";
     if (data) {
         data.forEach(alert => {
@@ -230,7 +205,7 @@ async function loadAttendance() {
 
 async function loadUsers() {
     // لا يتم عرض المديرين الأساسيين في القائمة لحمايتهم من الحذف أو التعديل
-    const { data } = await db.from('users').select('*').neq('role', 'super_admin').limit(3000);
+    const { data } = await db.rpc('admin_list_users', { p_admin: currentUser.username, p_pass: currentPassword });
     const tbody = document.getElementById('usersBody');
     tbody.innerHTML = "";
     if (data) {
@@ -253,7 +228,7 @@ async function loadUsers() {
         });
     }
 }
-
+;
 // إضافة مستخدم جديد (المستخدمون المضافون بواسطة المشرفين لا يحصلون على أي صلاحيات إدارية)
 document.getElementById('addUserForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -270,16 +245,16 @@ document.getElementById('addUserForm').addEventListener('submit', async (e) => {
         selectedPerms = Array.from(checkboxes).map(cb => cb.value);
     }
 
-    const hashed = await hashPassword(password);
-    const { error } = await db.from('users').insert([{
-        username: username,
-        full_name: fullName,
-        password_hash: hashed,
-        role: selectedPerms.length > 0 ? 'moderator' : 'student',
-        permissions: selectedPerms
-    }]);
+   const { data: ok, error } = await db.rpc('admin_add_user', {
+    p_admin: currentUser.username,
+    p_pass: currentPassword,
+    p_username: username,
+    p_full_name: fullName,
+    p_password: password,
+    p_permissions: selectedPerms
+});
 
-    if (!error) {
+   if (!error && ok) {
         alert("تمت إضافة المستخدم بنجاح!");
         document.getElementById('addUserForm').reset();
         loadUsers();
@@ -290,7 +265,7 @@ document.getElementById('addUserForm').addEventListener('submit', async (e) => {
 
 async function warnUser(id, count) {
     if (!hasPerm('warn_user')) return;
-    await db.from('users').update({ warnings_count: count + 1 }).eq('id', id);
+await db.rpc('admin_warn_user', { p_admin: currentUser.username, p_pass: currentPassword, p_user_id: id });
     alert("تم تسجيل تحذير.");
     loadUsers();
 }
