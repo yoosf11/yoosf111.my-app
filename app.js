@@ -1,5 +1,5 @@
 // 1. إعدادات قاعدة البيانات السحابية المجانية (Supabase)
-const SUPABASE_URL = 'https://.ahgokztpqzzknphuyyys.supabase.co';
+const SUPABASE_URL = 'https://ahgokztpqzzknphuyyys.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_Z3OH28tFzHhPyyP6xaUICA_yZk9gopk';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
