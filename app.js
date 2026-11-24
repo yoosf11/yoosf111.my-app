@@ -1,6 +1,6 @@
 // 1. إعدادات Supabase
-const SUPABASE_URL = 'https://ahgokztpqzzknphuyyys.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_Z3OH28tFzHhPyyP6xaUICA_yZk9gopk';
+const SUPABASE_URL = 'https://pkxyhzxwpdhcvnesedkp.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_yPSgxRPOukgyYmger9uhJw_wwVSPMWa';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentUser = null;
@@ -40,7 +40,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     errorEl.textContent = currentLang === 'ar' ? "جاري التحقق..." : "Verifying...";
 
     const { data, error } = await db.rpc('login_user', { p_username: username, p_password: password });
-    const user = data && data.length ? data[0] : null;
+    const user = data && data.user ? data.user : null;
 
     if (error || !user) {
         errorEl.textContent = currentLang === 'ar' ? "خطأ في اسم المستخدم أو كلمة المرور!" : "Invalid credentials!";
@@ -95,9 +95,11 @@ async function markAttendance() {
             p_location: coords
         });
 
-        const status = !error && data ? data.status : 'error';
+        const isSuccess = data && data.success;
+        // كان المتغير status غير معرّف، فاتعرّف هنا
+        const status = data && (data.status || data.error || data.reason);
 
-        if (status === 'ok') {
+        if (isSuccess) {
             statusEl.style.color = "green";
             statusEl.textContent = `✅ تم تسجيل حضورك بنجاح في مادة تفكير ابتكاري يوم ${data.day} الساعة ${data.time}`;
         } else if (status === 'duplicate') {
@@ -226,21 +228,22 @@ document.getElementById('addUserForm').addEventListener('submit', async (e) => {
         selectedPerms = Array.from(checkboxes).map(cb => cb.value);
     }
 
-    const { data: ok, error } = await db.rpc('admin_add_user', {
-        p_admin: currentUser.username,
+    const { data, error } = await db.rpc('admin_add_user', {
+        p_admin: currentUser.username,   // كان currentUserUsername (غير معرّف)
         p_pass: currentPassword,
+        p_permissions: selectedPerms,
         p_username: username,
         p_full_name: fullName,
-        p_password: password,
-        p_permissions: selectedPerms
+        p_new_password: password
     });
 
-    if (!error && ok) {
+    if (!error && data?.success) {
         alert("تمت إضافة المستخدم بنجاح!");
         document.getElementById('addUserForm').reset();
         loadUsers();
     } else {
-        alert("خطأ: اسم المستخدم مستخدم بالفعل.");
+        console.error(error || data);
+        alert("خطأ: " + (error?.message || data?.error || "اسم المستخدم مستخدم بالفعل."));
     }
 });
 
